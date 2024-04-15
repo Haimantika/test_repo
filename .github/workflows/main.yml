@@ -35,7 +35,7 @@ jobs:
       if: env.HAS_CONTRIBUTED == 'false'
       uses: bdougie/take-action@main
       with:
-        message: Thanks for taking this issue! Let us know if you have any questions!
+        message: Thanks for your interest in this issue. It looks like this is a good first issue, and you have already contributed to the codebase. Let us leave this issue for a newcomer to the project,but please take a look at our other open issues if you would still like to contribute.
         trigger: .take
         token: ${{ secrets.GITHUB_TOKEN }}
 
