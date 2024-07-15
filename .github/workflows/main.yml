@@ -42,22 +42,17 @@ jobs:
     - name: Assign issue based on conditions
       run: |
         ISSUE_NUMBER=$(jq --raw-output .issue.number "$GITHUB_EVENT_PATH")
-        if [[ $HAS_CONTRIBUTED == 'true' && $HAS_GOOD_FIRST_ISSUE_LABEL == '0' ]]; then
-          # Existing contributor and not a 'good first issue', can take the issue
-          MESSAGE="This issue is now assigned to you. Thank you for continuing to contribute!"
+        if [[ $HAS_CONTRIBUTED == 'true' && $HAS_GOOD_FIRST_ISSUE_LABEL == '0' ]] || [[ $HAS_CONTRIBUTED == 'false' ]]; then
+          # Either an existing contributor taking a non-'good first issue' or a new contributor taking any issue
+          MESSAGE="This issue is now assigned to you. Thank you for your contributions!"
+          # Posting the assignment message
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -d "{\"body\": \"$MESSAGE\"}" "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments"
-          curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -X POST -d "{\"assignees\": [\"$COMMENTER\"]}" "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/assignees"
-        elif [[ $HAS_CONTRIBUTED == 'false' ]]; then
-          # New contributor, can take any issue including 'good first issue'
-          MESSAGE="Welcome aboard! This issue is now assigned to you."
-          curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -d "{\"body\": \"$MESSAGE\"}" "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments"
-          curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -X POST -d "{\"assignees\": [\"$COMMENTER\"]}" "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/assignees"
+          # Assigning the issue
+          curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -d "{\"assignees\": [\"$COMMENTER\"]}" "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/assignees"
         elif [[ $HAS_GOOD_FIRST_ISSUE_LABEL != '0' ]]; then
           # Existing contributor trying to take a 'good first issue'
           MESSAGE="Thank you for your interest, but this 'good first issue' is reserved for new contributors."
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -d "{\"body\": \"$MESSAGE\"}" "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments"
-        fi
-
       env:
         HAS_CONTRIBUTED: ${{ env.HAS_CONTRIBUTED }}
         HAS_GOOD_FIRST_ISSUE_LABEL: ${{ env.HAS_GOOD_FIRST_ISSUE_LABEL }}
