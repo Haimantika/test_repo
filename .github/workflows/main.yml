@@ -36,20 +36,19 @@ jobs:
 
         # Fetching labels from the issue
         LABELS_JSON=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/$REPO_FULL_NAME/issues/$ISSUE_NUMBER/labels")
-        HAS_GOOD_FIRST_ISSUE_LABEL=$(echo "$LABELS_JSON" | jq -r 'map(select(.name == "good first issue")) | length')
+        HAS_GOOD_FIRST_ISSUE_LABEL=$(echo "$LABELS_JSON" | jq -r 'map(select(.name == "good first issue")).length')
         echo "HAS_GOOD_FIRST_ISSUE_LABEL=$HAS_GOOD_FIRST_ISSUE_LABEL" >> $GITHUB_ENV
 
     - name: Assign issue based on conditions
       run: |
-        ISSUE_NUMBER=$(jq --raw-output .issue.number "$GITHUB_EVENT_PATH")
-        if [[ $HAS_CONTRIBUTED == 'true' && $HAS_GOOD_FIRST_ISSUE_LABEL == '0' ]] || [[ $HAS_CONTRIBUTED == 'false' ]]; then
+        if [[ "$HAS_CONTRIBUTED" == 'true' && "$HAS_GOOD_FIRST_ISSUE_LABEL" == '0' ]] || [[ "$HAS_CONTRIBUTED" == 'false' ]]; then
           # Either an existing contributor taking a non-'good first issue' or a new contributor taking any issue
           MESSAGE="This issue is now assigned to you. Thank you for your contributions!"
           # Posting the assignment message
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -d "{\"body\": \"$MESSAGE\"}" "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments"
           # Assigning the issue
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -d "{\"assignees\": [\"$COMMENTER\"]}" "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/assignees"
-        elif [[ $HAS_GOOD_FIRST_ISSUE_LABEL != '0' ]]; then
+        elif [[ "$HAS_GOOD_FIRST_ISSUE_LABEL" != '0' ]]; then
           # Existing contributor trying to take a 'good first issue'
           MESSAGE="Thank you for your interest, but this 'good first issue' is reserved for new contributors."
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -d "{\"body\": \"$MESSAGE\"}" "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments"
@@ -57,5 +56,6 @@ jobs:
         HAS_CONTRIBUTED: ${{ env.HAS_CONTRIBUTED }}
         HAS_GOOD_FIRST_ISSUE_LABEL: ${{ env.HAS_GOOD_FIRST_ISSUE_LABEL }}
         COMMENTER: ${{ env.COMMENTER }}
+
 
 
