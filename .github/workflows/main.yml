@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
-      contents: read
+      contents: read  # Required for the checkout action
 
     steps:
     - name: Checkout code
@@ -33,16 +33,13 @@ jobs:
     - name: Assign issue based on conditions
       run: |
         if [[ "$HAS_CONTRIBUTED" == "false" ]] || [[ "$HAS_CONTRIBUTED" == "true" && "$HAS_GOOD_FIRST_ISSUE_LABEL" == "false" ]]; then
-          # Either an existing contributor taking a non-'good first issue' or a new contributor taking any issue
           MESSAGE="This issue is now assigned to you. Thank you for your contributions!"
-          # Posting the assignment message
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -d "{\"body\": \"$MESSAGE\"}" "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments"
-          # Assigning the issue
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -d "{\"assignees\": [\"$COMMENTER\"]}" "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/assignees"
         else
           MESSAGE="Thank you for your interest, but this 'good first issue' is reserved for new contributors."
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -d "{\"body\": \"$MESSAGE\"}" "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments"
-
+        fi
       env:
         HAS_CONTRIBUTED: ${{ env.HAS_CONTRIBUTED }}
         HAS_GOOD_FIRST_ISSUE_LABEL: ${{ env.HAS_GOOD_FIRST_ISSUE_LABEL }}
