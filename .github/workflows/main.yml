@@ -31,19 +31,30 @@ jobs:
         }
         HAS_CONTRIBUTED=$(has_contributed $COMMENTER)
         echo "HAS_CONTRIBUTED=$HAS_CONTRIBUTED" >> $GITHUB_ENV
-    - name: take the issue
-      if: env.HAS_CONTRIBUTED == 'false'
+        # Fetching the labels of the current issue
+        ISSUE_NUMBER=$(jq --raw-output .issue.number "$GITHUB_EVENT_PATH")
+        LABELS_JSON=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/$REPO_FULL_NAME/issues/$ISSUE_NUMBER/labels")
+        HAS_GOOD_FIRST_ISSUE_LABEL=$(echo "$LABELS_JSON" | jq -r '.[] | select(.name == "good first issue") | .name')
+        echo "HAS_GOOD_FIRST_ISSUE_LABEL=$HAS_GOOD_FIRST_ISSUE_LABEL" >> $GITHUB_ENV
+
+    - name: take the issue if new contributor and not a good first issue
+      if: env.HAS_CONTRIBUTED == 'false' && env.HAS_GOOD_FIRST_ISSUE_LABEL == ''
       uses: bdougie/take-action@main
       with:
-        message: Thanks for your interest in this issue. It looks like this is a good first issue, and you have already contributed to the codebase. Let us leave this issue for a newcomer to the project,but please take a look at our other open issues if you would still like to contribute.
+        message: "This issue is now assigned to you. Welcome aboard and thank you for contributing!"
         trigger: .take
         token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Notify if not eligible
-      if: env.HAS_CONTRIBUTED == 'true'
+      if: env.HAS_CONTRIBUTED == 'true' || env.HAS_GOOD_FIRST_ISSUE_LABEL == 'good first issue'
       run: |
         ISSUE_NUMBER=$(jq --raw-output .issue.number "$GITHUB_EVENT_PATH")
-        MESSAGE="Thank you for your interest, but as a previous contributor, we are reserving this issue for new contributors."
+        if [ "$HAS_GOOD_FIRST_ISSUE_LABEL" == "good first issue" ]; then
+          MESSAGE="Thank you for your interest, but this 'good first issue' is reserved for new contributors."
+        else
+          MESSAGE="Thank you for your interest, but as a previous contributor, we are reserving this issue for new contributors."
+        fi
         curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
              -X POST -d "{\"body\": \"$MESSAGE\"}" \
              "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments"
+
