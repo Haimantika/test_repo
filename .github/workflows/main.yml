@@ -14,11 +14,13 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
 
-    - name: Check if the user is a new contributor
+    - name: Check if the user is a new contributor and fetch issue labels
       id: check-contributor
       run: |
         COMMENTER=$(jq --raw-output .comment.user.login "$GITHUB_EVENT_PATH")
         REPO_FULL_NAME=$(jq --raw-output .repository.full_name "$GITHUB_EVENT_PATH")
+        ISSUE_NUMBER=$(jq --raw-output .issue.number "$GITHUB_EVENT_PATH")
+        
         # Function to check if the user has previous contributions
         function has_contributed() {
           RESPONSE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/$REPO_FULL_NAME/commits?author=$1")
@@ -31,14 +33,14 @@ jobs:
         }
         HAS_CONTRIBUTED=$(has_contributed $COMMENTER)
         echo "HAS_CONTRIBUTED=$HAS_CONTRIBUTED" >> $GITHUB_ENV
-        # Fetching the labels of the current issue
-        ISSUE_NUMBER=$(jq --raw-output .issue.number "$GITHUB_EVENT_PATH")
+
+        # Fetching labels from the issue
         LABELS_JSON=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/$REPO_FULL_NAME/issues/$ISSUE_NUMBER/labels")
-        HAS_GOOD_FIRST_ISSUE_LABEL=$(echo "$LABELS_JSON" | jq -r '.[] | select(.name == "good first issue") | .name')
+        HAS_GOOD_FIRST_ISSUE_LABEL=$(echo "$LABELS_JSON" | jq -r 'map(select(.name == "good first issue")) | length')
         echo "HAS_GOOD_FIRST_ISSUE_LABEL=$HAS_GOOD_FIRST_ISSUE_LABEL" >> $GITHUB_ENV
 
     - name: take the issue if new contributor and not a good first issue
-      if: env.HAS_CONTRIBUTED == 'false' && env.HAS_GOOD_FIRST_ISSUE_LABEL == ''
+      if: env.HAS_CONTRIBUTED == 'false' && env.HAS_GOOD_FIRST_ISSUE_LABEL == '0'
       uses: bdougie/take-action@main
       with:
         message: "This issue is now assigned to you. Welcome aboard and thank you for contributing!"
@@ -46,10 +48,10 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Notify if not eligible
-      if: env.HAS_CONTRIBUTED == 'true' || env.HAS_GOOD_FIRST_ISSUE_LABEL == 'good first issue'
+      if: env.HAS_CONTRIBUTED == 'true' || env.HAS_GOOD_FIRST_ISSUE_LABEL != '0'
       run: |
         ISSUE_NUMBER=$(jq --raw-output .issue.number "$GITHUB_EVENT_PATH")
-        if [ "$HAS_GOOD_FIRST_ISSUE_LABEL" == "good first issue" ]; then
+        if [ "$HAS_GOOD_FIRST_ISSUE_LABEL" != "0" ]; then
           MESSAGE="Thank you for your interest, but this 'good first issue' is reserved for new contributors."
         else
           MESSAGE="Thank you for your interest, but as a previous contributor, we are reserving this issue for new contributors."
@@ -57,4 +59,5 @@ jobs:
         curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
              -X POST -d "{\"body\": \"$MESSAGE\"}" \
              "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments"
+
 
