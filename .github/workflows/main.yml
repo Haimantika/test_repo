@@ -36,9 +36,8 @@ jobs:
 
         # Fetching labels from the issue and checking for 'good first issue'
         LABELS_JSON=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/$REPO_FULL_NAME/issues/$ISSUE_NUMBER/labels")
-        HAS_GOOD_FIRST_ISSUE_LABEL=$(echo "$LABELS_JSON" | jq '[.[] | select(.name == "good first issue")] | length > 0')
+        HAS_GOOD_FIRST_ISSUE_LABEL=$(echo "$LABELS_JSON" | jq '[.[] | select(.name == "good first issue")] | length')
         echo "HAS_GOOD_FIRST_ISSUE_LABEL=$HAS_GOOD_FIRST_ISSUE_LABEL" >> $GITHUB_ENV
-        echo "Contributed: $HAS_CONTRIBUTED, Good First Issue Label: $HAS_GOOD_FIRST_ISSUE_LABEL, Commenter: $COMMENTER"
 
     - name: Assign issue based on conditions
       run: |
@@ -46,6 +45,7 @@ jobs:
           MESSAGE="This issue is now assigned to you. Thank you for your contributions!"
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -d "{\"body\": \"$MESSAGE\"}" "https://api.github.com/repos/$REPO_FULL_NAME/issues/$ISSUE_NUMBER/comments"
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -d "{\"assignees\": [\"$COMMENTER\"]}" "https://api.github.com/repos/$REPO_FULL_NAME/issues/$ISSUE_NUMBER/assignees"
-        elif [[ "$HAS_GOOD_FIRST_ISSUE_LABEL" != "0" ]]; then
+        else
           MESSAGE="Thank you for your interest, but this 'good first issue' is reserved for new contributors."
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -d "{\"body\": \"$MESSAGE\"}" "https://api.github.com/repos/$REPO_FULL_NAME/issues/$ISSUE_NUMBER/comments"
+        fi
