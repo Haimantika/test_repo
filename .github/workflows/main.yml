@@ -32,7 +32,8 @@ jobs:
 
     - name: Assign issue based on conditions
       run: |
-        if [[ "$HAS_CONTRIBUTED" == "false" || ("$HAS_CONTRIBUTED" == "true" && "$HAS_GOOD_FIRST_ISSUE_LABEL" == "false") ]]; then
+        if [[ "$HAS_CONTRIBUTED" == "false" ]] || [[ "$HAS_CONTRIBUTED" == "true" && "$HAS_GOOD_FIRST_ISSUE_LABEL" == "false" ]]; then
+          # Either an existing contributor taking a non-'good first issue' or a new contributor taking any issue
           MESSAGE="This issue is now assigned to you. Thank you for your contributions!"
           # Posting the assignment message
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -d "{\"body\": \"$MESSAGE\"}" "https://api.github.com/repos/${{ github.repository }}/issues/$ISSUE_NUMBER/comments"
@@ -46,7 +47,3 @@ jobs:
         HAS_CONTRIBUTED: ${{ env.HAS_CONTRIBUTED }}
         HAS_GOOD_FIRST_ISSUE_LABEL: ${{ env.HAS_GOOD_FIRST_ISSUE_LABEL }}
         COMMENTER: ${{ env.COMMENTER }}
-
-
-
-
