@@ -63,20 +63,23 @@ runs:
 
         if [[ $BODY == *"$INPUT_TRIGGER"* ]]; then
           BLOCKING_LABELS=(${RAW_BLOCKING_LABELS//,/ })
+          HAS_BLOCKING_LABEL="false"
           for label in "${BLOCKING_LABELS[@]}"; do
             if [[ "$ISSUE_LABELS" == *"$label"* ]]; then
-              echo "$BLOCKING_LABELS_MESSAGE"
-              curl -X POST -H "Authorization: token $GITHUB_PAT" -d "{\"body\": \"$BLOCKING_LABELS_MESSAGE\"}" "https://api.github.com/repos/$REPO/issues/$ISSUE_NUMBER/comments"
-              exit 0
+              HAS_BLOCKING_LABEL="true"
+              break
             fi
           done
 
-          if [[ "$ISSUE_CURRENTLY_ASSIGNED" == "false" ]]; then
+          if [[ "$HAS_BLOCKING_LABEL" == "true" ]]; then
+            echo "$BLOCKING_LABELS_MESSAGE"
+            curl -X POST -H "Authorization: token $GITHUB_PAT" -d "{\"body\": \"$BLOCKING_LABELS_MESSAGE\"}" "https://api.github.com/repos/$REPO/issues/$ISSUE_NUMBER/comments"
+          elif [[ "$ISSUE_CURRENTLY_ASSIGNED" == "false" ]]; then
             echo "$ISSUE_CURRENTLY_ASSIGNED_MESSAGE"
             curl -X POST -H "Authorization: token $GITHUB_PAT" -d "{\"body\": \"$ISSUE_CURRENTLY_ASSIGNED_MESSAGE\"}" "https://api.github.com/repos/$REPO/issues/$ISSUE_NUMBER/comments"
           else
-            curl -X POST -H "Authorization: token $GITHUB_PAT" -d "{\"body\": \"$INPUT_MESSAGE\"}" "https://api.github.com/repos/$REPO/issues/$ISSUE_NUMBER/comments"
             curl -H "Authorization: token $GITHUB_PAT" -X POST -d "{\"assignees\": [\"$LOGIN\"]}" "https://api.github.com/repos/$REPO/issues/$ISSUE_NUMBER/assignees"
+            curl -X POST -H "Authorization: token $GITHUB_PAT" -d "{\"body\": \"$INPUT_MESSAGE\"}" "https://api.github.com/repos/$REPO/issues/$ISSUE_NUMBER/comments"
           fi
         fi
       shell: bash
