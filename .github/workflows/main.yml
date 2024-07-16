@@ -38,14 +38,16 @@ jobs:
         else
           echo "The comment was not '.take'. Exiting workflow."
           exit 0
+        fi
 
     - name: Assign issue based on conditions
       if: env.HAS_CONTRIBUTED != '' # Only run this step if the above checks have been made
       run: |
-        if [[ "$HAS_CONTRIBUTED" == "false" ]] || [[ "$HAS_CONTRIBUTED" == "true" && "$HAS_GOOD_FIRST_ISSUE_LABEL" == "false" ]]; then
+        if [[ "$HAS_CONTRIBUTED" == "true" && "$HAS_GOOD_FIRST_ISSUE_LABEL" == "0" ]] || [[ "$HAS_CONTRIBUTED" == "false" ]]; then
           MESSAGE="This issue is now assigned to you. Thank you for your contributions!"
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -d "{\"body\": \"$MESSAGE\"}" "https://api.github.com/repos/$REPO_FULL_NAME/issues/$ISSUE_NUMBER/comments"
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -d "{\"assignees\": [\"$COMMENTER\"]}" "https://api.github.com/repos/$REPO_FULL_NAME/issues/$ISSUE_NUMBER/assignees"
-        elif [[ "$HAS_GOOD_FIRST_ISSUE_LABEL" == "true" ]]; then
+        elif [[ "$HAS_GOOD_FIRST_ISSUE_LABEL" != "0" ]]; then
           MESSAGE="Thank you for your interest, but this 'good first issue' is reserved for new contributors."
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -d "{\"body\": \"$MESSAGE\"}" "https://api.github.com/repos/$REPO_FULL_NAME/issues/$ISSUE_NUMBER/comments"
+        fi
