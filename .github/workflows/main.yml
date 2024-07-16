@@ -36,12 +36,20 @@ jobs:
         # Fetch issue labels
         LABELS_RESPONSE=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/$REPO_FULL_NAME/issues/$ISSUE_NUMBER/labels")
         echo "Labels response: $LABELS_RESPONSE"
-        HAS_GOOD_FIRST_ISSUE_LABEL=$(echo "$LABELS_RESPONSE" | jq 'if type == "array" then map(select(.name == "good first issue")) | length else 0 end')
+        if echo "$LABELS_RESPONSE" | jq -e '.message' >/dev/null; then
+          echo "Error fetching labels: $(echo "$LABELS_RESPONSE" | jq -r '.message')"
+          exit 1
+        fi
+        HAS_GOOD_FIRST_ISSUE_LABEL=$(echo "$LABELS_RESPONSE" | jq '[.[] | select(.name == "good first issue")] | length')
         echo "Good first issue label presence: $HAS_GOOD_FIRST_ISSUE_LABEL"
 
         # Check for previous contributions
         CONTRIBUTIONS_RESPONSE=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/$REPO_FULL_NAME/commits?author=$COMMENTER")
         echo "Contributions response: $CONTRIBUTIONS_RESPONSE"
+        if echo "$CONTRIBUTIONS_RESPONSE" | jq -e '.message' >/dev/null; then
+          echo "Error checking contributions: $(echo "$CONTRIBUTIONS_RESPONSE" | jq -r '.message')"
+          exit 1
+        fi
         HAS_CONTRIBUTED=$(echo "$CONTRIBUTIONS_RESPONSE" | jq '. | length > 0')
         echo "Contributed: $HAS_CONTRIBUTED"
 
