@@ -18,6 +18,7 @@ jobs:
     - name: Extract issue and user information and check comment
       run: |
         COMMENT_BODY=$(jq --raw-output .comment.body "$GITHUB_EVENT_PATH")
+        echo "Received comment: '${COMMENT_BODY}'"
         if [[ "$COMMENT_BODY" != ".take" ]]; then
           echo "Comment does not contain '.take', exiting..."
           exit 0
@@ -27,24 +28,30 @@ jobs:
         REPO_FULL_NAME=$(jq --raw-output .repository.full_name "$GITHUB_EVENT_PATH")
         ISSUE_NUMBER=$(jq --raw-output .issue.number "$GITHUB_EVENT_PATH")
         
+        echo "Proceeding with user: $COMMENTER on issue $ISSUE_NUMBER in repo $REPO_FULL_NAME"
+
+    - name: Check if the user is a new contributor and fetch issue labels
+      run: |
         # Fetch issue labels
         LABELS_JSON=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/$REPO_FULL_NAME/issues/$ISSUE_NUMBER/labels")
         echo "Issue labels: $LABELS_JSON"
-        HAS_GOOD_FIRST_ISSUE_LABEL=$(echo "$LABELS_JSON" | jq '[.[] | select(.name == "good first issue")] | length')
-        echo "Good first issue label count: $HAS_GOOD_FIRST_ISSUE_LABEL"
+        HAS_GOOD_FIRST_ISSUE_LABEL=$(echo "$LABELS_JSON" | jq '[.[] | select(.name == "good first issue")] | length > 0')
+        echo "Good first issue label presence: $HAS_GOOD_FIRST_ISSUE_LABEL"
 
         # Check for previous contributions
         RESPONSE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/$REPO_FULL_NAME/commits?author=$COMMENTER")
         HAS_CONTRIBUTED=$(echo "$RESPONSE" | jq '. | length > 0')
         echo "Contributed: $HAS_CONTRIBUTED"
-        
+
     - name: Assign issue based on conditions
       run: |
-        if [[ "$HAS_CONTRIBUTED" == "true" && "$HAS_GOOD_FIRST_ISSUE_LABEL" == "0" ]] || [[ "$HAS_CONTRIBUTED" == "false" ]]; then
+        echo "Evaluating conditions to assign the issue..."
+        if [[ "$HAS_CONTRIBUTED" == "true" && "$HAS_GOOD_FIRST_ISSUE_LABEL" == "false" ]] || [[ "$HAS_CONTRIBUTED" == "false" ]]; then
           MESSAGE="This issue is now assigned to you. Thank you for your contributions!"
+          echo $MESSAGE
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -d "{\"body\": \"$MESSAGE\"}" "https://api.github.com/repos/$REPO_FULL_NAME/issues/$ISSUE_NUMBER/comments"
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -d "{\"assignees\": [\"$COMMENTER\"]}" "https://api.github.com/repos/$REPO_FULL_NAME/issues/$ISSUE_NUMBER/assignees"
-        elif [[ "$HAS_GOOD_FIRST_ISSUE_LABEL" != "0" ]]; then
+        else
           MESSAGE="Thank you for your interest, but this 'good first issue' is reserved for new contributors."
           echo $MESSAGE
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -d "{\"body\": \"$MESSAGE\"}" "https://api.github.com/repos/$REPO_FULL_NAME/issues/$ISSUE_NUMBER/comments"
