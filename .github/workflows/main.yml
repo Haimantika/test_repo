@@ -39,6 +39,20 @@ jobs:
         HAS_GOOD_FIRST_ISSUE_LABEL=$(echo "$LABELS_JSON" | jq '[.[] | select(.name == "good first issue")] | length')
         echo "HAS_GOOD_FIRST_ISSUE_LABEL=$HAS_GOOD_FIRST_ISSUE_LABEL" >> $GITHUB_ENV
 
+    - name: Check if the comment is '.take'
+      run: |
+        if [[ "$COMMENT_BODY" == ".take" ]]; then
+          echo "Proceeding to check contributor status and fetch issue labels."
+          RESPONSE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/$REPO_FULL_NAME/commits?author=$COMMENTER")
+          HAS_CONTRIBUTED=$(echo "$RESPONSE" | jq '. | length > 0' | tr -d '\n')
+          LABELS_JSON=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/$REPO_FULL_NAME/issues/$ISSUE_NUMBER/labels")
+          HAS_GOOD_FIRST_ISSUE_LABEL=$(echo "$LABELS_JSON" | jq '[.[] | select(.name == "good first issue")] | length > 0' | tr -d '\n')
+          echo "HAS_CONTRIBUTED=$HAS_CONTRIBUTED" >> $GITHUB_ENV
+          echo "HAS_GOOD_FIRST_ISSUE_LABEL=$HAS_GOOD_FIRST_ISSUE_LABEL" >> $GITHUB_ENV
+        else
+          echo "The comment was not '.take'. Exiting workflow."
+          exit 0
+
     - name: Assign issue based on conditions
       run: |
         if [[ "$HAS_CONTRIBUTED" == "true" && "$HAS_GOOD_FIRST_ISSUE_LABEL" == "0" ]] || [[ "$HAS_CONTRIBUTED" == "false" ]]; then
