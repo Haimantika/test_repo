@@ -8,7 +8,7 @@ jobs:
     name: Take an issue
     runs-on: ubuntu-latest
     permissions:
-      issues: write  # Set to write to allow modifying issues
+      issues: write  # Updated to write to allow modification of issue assignments
       contents: read
 
     steps:
@@ -28,25 +28,18 @@ jobs:
         ISSUE_NUMBER=$(jq --raw-output .issue.number "$GITHUB_EVENT_PATH")
         echo "Processing with user: $COMMENTER on issue $ISSUE_NUMBER in repo $REPO_FULL_NAME"
 
-    - name: Check previous contributions and assign issue
+    - name: Fetch issue labels and check contributor status
       run: |
         # Check if the user has previously contributed to a 'good first issue'
         CONTRIBUTIONS_RESPONSE=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/search/issues?q=author:$COMMENTER+label:\"good first issue\"+repo:$REPO_FULL_NAME")
         CONTRIBUTED_TO_GFI=$(echo "$CONTRIBUTIONS_RESPONSE" | jq '.total_count > 0')
-        # Convert true/false to 0/1 for Bash condition check
-        CONTRIBUTED_TO_GFI=$(echo "$CONTRIBUTED_TO_GFI" | jq '. == true')
 
-        if [[ $CONTRIBUTED_TO_GFI -eq 1 ]]; then
+        if [[ $CONTRIBUTED_TO_GFI == true ]]; then
           echo "Error: You have already contributed to a 'good first issue' in this repository and are not eligible to take this issue."
           exit 1
         else
           # Assign the issue
           ASSIGNMENT_RESPONSE=$(curl -s -X POST -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Content-Type: application/json" -d "{\"assignees\": [\"$COMMENTER\"]}" "https://api.github.com/repos/$REPO_FULL_NAME/issues/$ISSUE_NUMBER/assignees")
-          if [[ $(echo "$ASSIGNMENT_RESPONSE" | jq -e '.message' >/dev/null) ]]; then
-            echo "Error assigning issue: $(echo "$ASSIGNMENT_RESPONSE" | jq -r '.message')"
-            exit 1
-          else
-            echo "Issue $ISSUE_NUMBER has been successfully assigned to $COMMENTER."
-          fi
+          echo "Issue $ISSUE_NUMBER has been successfully assigned to $COMMENTER."
         fi
       shell: bash
