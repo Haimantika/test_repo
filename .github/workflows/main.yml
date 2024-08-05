@@ -12,6 +12,7 @@ jobs:
 
       - name: Assign issue to contributor
         run: |
+          echo "Extracting data from event payload..."
           BODY="${{ github.event.comment.body }}"
           ISSUE_NUMBER="${{ github.event.issue.number }}"
           LOGIN="${{ github.event.comment.user.login }}"
@@ -22,30 +23,42 @@ jobs:
           GOOD_FIRST_ISSUE_LABEL="good first issue"
           GOOD_FIRST_ISSUE=$(echo "$ISSUE_LABELS" | grep -qw "$GOOD_FIRST_ISSUE_LABEL" && echo "true" || echo "false")
 
+          echo "BODY: $BODY"
+          echo "ISSUE_NUMBER: $ISSUE_NUMBER"
+          echo "LOGIN: $LOGIN"
+          echo "REPO: $REPO"
+          echo "ISSUE_LABELS: $ISSUE_LABELS"
+          echo "ISSUE_CURRENTLY_ASSIGNED: $ISSUE_CURRENTLY_ASSIGNED"
+          echo "GOOD_FIRST_ISSUE: $GOOD_FIRST_ISSUE"
+
           # Check if the user has previously been assigned to a good first issue
           HAS_PREVIOUSLY_CONTRIBUTED=$(curl -H "Authorization: bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/search/issues?q=repo:$REPO+assignee:$LOGIN+label:\"$GOOD_FIRST_ISSUE_LABEL\"+is:issue+state:closed" | jq '.total_count != 0')
 
+          echo "HAS_PREVIOUSLY_CONTRIBUTED: $HAS_PREVIOUSLY_CONTRIBUTED"
+
           if [[ "$BODY" == *".take"* ]]; then
+            echo "Trigger command found in comment..."
             if [[ "$ISSUE_CURRENTLY_ASSIGNED" == "true" ]]; then
+              echo "Issue is currently not assigned to anyone..."
               if [ "$GOOD_FIRST_ISSUE" == "true" ] && [ "$HAS_PREVIOUSLY_CONTRIBUTED" == "true" ]; then
                 echo "This user has already been assigned to a good first issue. Not assigning again."
                 exit 0
               fi
               BLOCKING_LABELS="label1,label2"
-              echo "Issue labels: $ISSUE_LABELS"
-              echo "Blocking labels: $BLOCKING_LABELS"
               blocking_label_found=$(echo "$ISSUE_LABELS" | grep -qw $(echo $BLOCKING_LABELS | sed 's/,/\\|/g') && echo "true" || echo "false")
               echo "blocking label found: $blocking_label_found"
               if [ "$blocking_label_found" == "true" ]; then
                 echo "Issue contains one or more blocking labels: $BLOCKING_LABELS"
                 echo "Unable to assign issue $ISSUE_NUMBER to $LOGIN"
               else
-                echo "Assigning issue $ISSUE_NUMBER to $LOGIN"
+                echo "No blocking labels found. Proceeding to assign issue..."
                 curl -H "Authorization: bearer ${{ secrets.GITHUB_TOKEN }}" -d '{"assignees":["'"$LOGIN"'"]}' https://api.github.com/repos/$REPO/issues/$ISSUE_NUMBER/assignees
               fi
             else
               echo "This issue is currently assigned to a different user"
             fi
+          else
+            echo "Trigger command not found in comment..."
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
