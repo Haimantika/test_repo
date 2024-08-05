@@ -1,45 +1,86 @@
-name: Assign issue to contributor
+name: Contributor Takes Action
 on:
   issue_comment:
     types: [created]
 
 jobs:
-  assign:
-    name: Take an issue
+  assign_issues:
     runs-on: ubuntu-latest
-    permissions:
-      issues: write  # Updated to write to allow modification of issue assignments
-      contents: read
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Extract issue and user information and check comment
-      run: |
-        COMMENT_BODY=$(jq --raw-output .comment.body "$GITHUB_EVENT_PATH")
-        if [[ "$COMMENT_BODY" != ".take" ]]; then
-          echo "Comment does not contain '.take', exiting..."
-          exit 0
-        fi
+      - name: Assign issue to contributor
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BODY="${{ github.event.comment.body }}"
+          ISSUE_NUMBER="${{ github.event.issue.number }}"
+          LOGIN="${{ github.event.comment.user.login }}"
+          REPO="${{ github.repository }}"
+          ISSUE_LABELS=$(echo "${{ toJson(github.event.issue.labels.*.name) }}")
+          ISSUE_CURRENTLY_ASSIGNED=$(jq -n '${{ toJson(github.event.issue.assignees) | length == 0 }}')
+          GOOD_FIRST_ISSUE_LABEL="good first issue"
+          GOOD_FIRST_ISSUE=$(echo "$ISSUE_LABELS" | grep -w "$GOOD_FIRST_ISSUE_LABEL")
 
-        COMMENTER=$(jq --raw-output .comment.user.login "$GITHUB_EVENT_PATH")
-        REPO_FULL_NAME=$(jq --raw-output .repository.full_name "$GITHUB_EVENT_PATH")
-        ISSUE_NUMBER=$(jq --raw-output .issue.number "$GITHUB_EVENT_PATH")
-        echo "Processing with user: $COMMENTER on issue $ISSUE_NUMBER in repo $REPO_FULL_NAME"
+          # Check if the user has previously been assigned to a good first issue
+          HAS_PREVIOUSLY_CONTRIBUTED=$(curl -H "Authorization: bearer $GITHUB_TOKEN" "https://api.github.com/search/issues?q=repo:$REPO+assignee:$LOGIN+label:\"$GOOD_FIRST_ISSUE_LABEL\"+is:issue+state:closed" | jq '.total_count != 0')
 
-    - name: Fetch issue labels and check contributor status
-      run: |
-        # Check if the user has previously contributed to a 'good first issue'
-        CONTRIBUTIONS_RESPONSE=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/search/issues?q=author:$COMMENTER+label:\"good first issue\"+repo:$REPO_FULL_NAME")
-        CONTRIBUTED_TO_GFI=$(echo "$CONTRIBUTIONS_RESPONSE" | jq '.total_count > 0')
-
-        if [[ $CONTRIBUTED_TO_GFI == true ]]; then
-          echo "Error: You have already contributed to a 'good first issue' in this repository and are not eligible to take this issue."
-          exit 1
-        else
-          # Assign the issue
-          ASSIGNMENT_RESPONSE=$(curl -s -X POST -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Content-Type: application/json" -d "{\"assignees\": [\"$COMMENTER\"]}" "https://api.github.com/repos/$REPO_FULL_NAME/issues/$ISSUE_NUMBER/assignees")
-          echo "Issue $ISSUE_NUMBER has been successfully assigned to $COMMENTER."
-        fi
-      shell: bash
+          if [[ "$BODY" == *"${{ inputs.trigger }}"* ]]; then
+            if [[ "$ISSUE_CURRENTLY_ASSIGNED" == "true" ]]; then
+              if [ ! -z "$GOOD_FIRST_ISSUE" ] && [ "$HAS_PREVIOUSLY_CONTRIBUTED" == "true" ]; then
+                echo "This user has already been assigned to a good first issue. Not assigning again."
+                exit 0
+              fi
+              BLOCKING_LABELS=$(echo "${{ inputs.blockingLabels }}" | jq -n --arg str "${{ inputs.blockingLabels }}" '$str | split(",")')
+              echo "Issue labels: $ISSUE_LABELS"
+              echo "Blocking labels: $BLOCKING_LABELS"
+              blocking_label_found=$(jq -n --argjson ISSUE_LABELS "$ISSUE_LABELS" --argjson BLOCKING_LABELS "$BLOCKING_LABELS" '$ISSUE_LABELS as $il | $BLOCKING_LABELS as $bl | any($il[]; . as $i | any($bl[]; . == $i))')
+              echo "blocking label found: $blocking_label_found"
+              if [ "$blocking_label_found" == "true" ]; then
+                echo "Issue contains one or more blocking labels: $BLOCKING_LABELS"
+                echo "Unable to assign issue $ISSUE_NUMBER to $LOGIN"
+                if [[ ! -z "${{ inputs.blockingLabelsMessage }}" ]]; then
+                  jq -n -r --arg body "${{ inputs.blockingLabelsMessage }}" '{body: $body}' > payload.json
+                  curl -X POST -H "Authorization: bearer $GITHUB_TOKEN" --data @payload.json https://api.github.com/repos/$REPO/issues/$ISSUE_NUMBER/comments
+                fi
+              else
+                echo "Assigning issue $ISSUE_NUMBER to $LOGIN"
+                curl -H "Authorization: bearer $GITHUB_TOKEN" -d '{"assignees":["'"$LOGIN"'"]}' https://api.github.com/repos/$REPO/issues/$ISSUE_NUMBER/assignees
+                if [[ ! -z "${{ inputs.message }}" ]]; then
+                  jq -n -r --arg body "${{ inputs.message }}" '{body: $body}' > payload.json
+                  curl -X POST -H "Authorization: bearer $GITHUB_TOKEN" --data @payload.json https://api.github.com/repos/$REPO/issues/$ISSUE_NUMBER/comments
+                fi
+              fi
+            else
+              echo "This issue is currently assigned to a different user"
+              if [[ ! -z "${{ inputs.issueCurrentlyAssignedMessage }}" ]]; then
+                jq -n -r --arg body "${{ inputs.issueCurrentlyAssignedMessage }}" '{body: $body}' > payload.json
+                curl -X POST -H "Authorization: bearer $GITHUB_TOKEN" --data @payload.json https://api.github.com/repos/$REPO/issues/$ISSUE_NUMBER/comments
+              fi
+            fi
+          fi
+        inputs:
+          message:
+            description: 'Message to prospective contributor'
+            required: false
+            default: ''
+          issueCurrentlyAssignedMessage:
+            description: 'Message to contributors if issue is already assigned'
+            required: false
+            default: 'The issue you are trying to assign to yourself is already assigned.'
+          blockingLabels:
+            description: 'Optional labels that are on an issue that block an issue from being assigned by the trigger.'
+            required: false
+            default: ''
+          blockingLabelsMessage:
+            description: 'Message to contributors if issue is blocked by a label'
+            required: false
+            default: 'The issue you are trying to assign to yourself is blocked by a one or more labels on the issue.'
+          trigger:
+            description: 'The string that triggers the action'
+            required: false
+            default: '.take'
+          token:
+            description: 'The GitHub PAT used to authenticate when updating the Issue'
+            required: true
